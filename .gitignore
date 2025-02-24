@@ -1,0 +1,24 @@
+# Ignore environment files
+.env
+config.json
+
+# Ignore Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+Lib/
+Scripts/
+
+# Ignore FAISS index files (optional, only if you don’t want to push them)
+knowledge_base/faiss_index/
+
+# Ignore logs and temporary files
+*.log
+*.tmp
+*.swp
+.DS_Store
+
+# Ignore Jupyter Notebook checkpoints (if you use Jupyter)
+.ipynb_checkpoints/

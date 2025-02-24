@@ -1,0 +1,140 @@
+# Emotion: Happy
+User: "I'm feeling great!"
+Response: "That’s wonderful! What’s making you happy today?"
+
+User: "I'm really excited!"
+Response: "Exciting times! Want to share what’s making you feel this way?"
+
+User: "I'm in a good mood."
+Response: "That’s awesome! Anything fun planned for today?"
+
+User: "I'm feeling positive!"
+Response: "That’s great to hear! What’s something good that happened recently?"
+
+User: "I'm full of energy!"
+Response: "Love that energy! What’s been keeping you motivated?"
+
+
+# Emotion: Sad
+User: "I feel down."
+Response: "I’m sorry to hear that. Want to talk about what’s on your mind?"
+
+User: "Nothing is going right."
+Response: "That must be really tough. Do you want to share what’s been bothering you?"
+
+User: "I feel alone."
+Response: "I hear you. Feeling lonely can be difficult. What’s been going on?"
+
+User: "I don’t know what to do anymore."
+Response: "That sounds overwhelming. Maybe talking through it could help?"
+
+User: "I just feel empty."
+Response: "That must be a hard feeling. Want to explore what’s making you feel this way?"
+
+
+# Emotion: Angry
+User: "I'm really frustrated."
+Response: "I hear you. Want to talk about what’s making you feel this way?"
+
+User: "Everything is so annoying!"
+Response: "That sounds exhausting. Do you want to vent about it?"
+
+User: "I'm just so mad right now."
+Response: "That’s completely understandable. What’s causing this frustration?"
+
+User: "I feel like no one understands me."
+Response: "That must be frustrating. Do you want to talk about what happened?"
+
+User: "I can’t deal with this anymore!"
+Response: "I hear that you’re feeling overwhelmed. Do you want to talk through it?"
+
+
+# Emotion: Stressed/Anxious
+User: "I feel really anxious."
+Response: "That’s a tough feeling. Want to talk about what’s making you feel this way?"
+
+User: "I'm overwhelmed with everything."
+Response: "That sounds like a lot to handle. What’s been the biggest challenge for you?"
+
+User: "I feel on edge."
+Response: "That must be stressful. What’s been making you feel this way?"
+
+User: "I can’t focus, my mind is racing."
+Response: "That sounds difficult. Do you want to take a deep breath and talk about it?"
+
+User: "I feel like I can’t catch a break."
+Response: "That must be frustrating. Want to talk about what’s been happening?"
+
+
+# Emotion: Fearful/Nervous
+User: "I'm really scared."
+Response: "That sounds tough. Do you want to share what’s worrying you?"
+
+User: "I feel uneasy."
+Response: "I hear you. Want to talk about what’s making you feel this way?"
+
+User: "I'm nervous about something."
+Response: "That’s understandable. Want to talk it through together?"
+
+User: "I feel unsafe."
+Response: "I’m here to listen. Do you want to talk about why you feel this way?"
+
+User: "I just have a bad feeling."
+Response: "That must be unsettling. Do you want to explore what’s causing it?"
+
+# Emotion: Neutral
+User: "I feel okay."
+Response: "Glad to hear that! Anything on your mind?"
+
+User: "I'm feeling normal."
+Response: "That’s good. Want to chat about anything in particular?"
+
+User: "Nothing much is happening."
+Response: "Sometimes, calm is good! Anything you’d like to talk about?"
+
+User: "I'm just here to talk."
+Response: "I’d love to chat! What’s on your mind?"
+
+User: "I don't know how I feel."
+Response: "That’s okay. Do you want to talk through it and see where it leads?"
+
+# Emotion: Neutral
+User: "I feel okay."
+Response: "Glad to hear that! Anything on your mind?"
+
+User: "I'm feeling normal."
+Response: "That’s good. Want to chat about anything in particular?"
+
+User: "Nothing much is happening."
+Response: "Sometimes, calm is good! Anything you’d like to talk about?"
+
+User: "I'm just here to talk."
+Response: "I’d love to chat! What’s on your mind?"
+
+User: "I don't know how I feel."
+Response: "That’s okay. Do you want to talk through it and see where it leads?"
+
+
+# Probing Responses (To Encourage More Conversation)
+User: "Nothing much."
+Response: "Got it! What’s something interesting that happened recently?"
+
+User: "I don’t know."
+Response: "That’s alright. Want to talk about your day?"
+
+User: "Just another day."
+Response: "Sometimes routine can be nice. How has your week been?"
+
+User: "Fine."
+Response: "Good to hear! Anything exciting going on?"
+
+
+# Clarification Responses (If The Text is Unclear)
+User: "Hmm."
+Response: "Thinking about something? I’d love to hear your thoughts."
+
+User: "Maybe."
+Response: "That’s interesting! Want to share more?"
+
+User: "It's whatever."
+Response: "I hear you. Anything specific on your mind?"
