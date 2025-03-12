@@ -1,25 +1,20 @@
 import os
-import faiss
 import pickle
-import numpy as np
-from sentence_transformers import SentenceTransformer
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import CharacterTextSplitter
+from langchain.schema import Document
 
 # Define paths
-DOCUMENTS_PATH = "C:/Users/PC/Desktop/MentalHealthAI/knowledge_base/documents/"
-FAISS_INDEX_PATH = "C:/Users/PC/Desktop/MentalHealthAI/knowledge_base/faiss_index/"
+DOCUMENTS_PATH = "C:/Users/PC/Desktop/MentalHealth/knowledge_base/documents/"
+FAISS_INDEX_PATH = "C:/Users/PC/Desktop/MentalHealth/knowledge_base/faiss_index/"
 
-# Ensure the FAISS index directory exists
+# Ensure FAISS index directory exists
 os.makedirs(FAISS_INDEX_PATH, exist_ok=True)
 
 # Load SentenceTransformer Model (FREE)
-embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-
-# Function to generate embeddings
-def get_embedding(text):
-    return embedding_model.encode(text)
+embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 # Load text documents
 documents = []
@@ -33,20 +28,25 @@ for file in os.listdir(DOCUMENTS_PATH):
 text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 chunks = text_splitter.split_documents(documents)
 
-# Convert text chunks into embeddings
-texts = [chunk.page_content for chunk in chunks]
-embeddings = np.array([get_embedding(text) for text in texts], dtype=np.float32)  # Convert to NumPy array
+# Print the first few documents for verification
+print("\n🔎 Verifying document structure before storing in FAISS...")
+for i, doc in enumerate(chunks[:5]):  # Print only first 5 docs
+    print(f"📄 Document {i+1}: {doc.page_content[:200]}...")  # Print first 200 chars
 
-# Create FAISS index
-dimension = embeddings.shape[1]  # Get embedding size
-faiss_index = faiss.IndexFlatL2(dimension)
-faiss_index.add(embeddings)
+# Ensure all documents are properly formatted
+if any(not isinstance(doc, Document) for doc in chunks):
+    raise ValueError("❌ Some documents are not in the correct `Document` format!")
 
-# Save FAISS index
-faiss.write_index(faiss_index, os.path.join(FAISS_INDEX_PATH, "faiss_index.bin"))
+# Ensure documents are not empty
+if any(not doc.page_content.strip() for doc in chunks):
+    raise ValueError("❌ Some documents are empty! Check data loading.")
 
-# Save text chunks for retrieval
-with open(os.path.join(FAISS_INDEX_PATH, "texts.pkl"), "wb") as f:
-    pickle.dump(texts, f)
+print(f"✅ All {len(chunks)} documents are correctly formatted and ready for FAISS storage.")
 
-print("✅ FAISS Knowledge Base Created & Saved with SentenceTransformers!")
+# Create FAISS index using LangChain
+vector_store = FAISS.from_documents(chunks, embedding_model)
+
+# Save FAISS index properly
+vector_store.save_local(FAISS_INDEX_PATH)
+
+print(f"✅ FAISS Knowledge Base Created! Total Chunks: {len(chunks)}")
