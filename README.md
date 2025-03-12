@@ -1,4 +1,4 @@
-### MentalHealthAI  
+## 🧠MentalHealthAI  
 
 **MentalHealthAI** is a conversational AI designed to evaluate mental well-being based on speech and text analysis. It integrates **Speech Emotion Recognition (SER), Sentiment Analysis, and a FAISS-based Retrieval-Augmented Generation (RAG) system** to generate responses dynamically.  
 
@@ -35,8 +35,6 @@ MentalHealthAI/
 │── README.md                # Project documentation
 │── LICENSE                  # License agreement
 ```
-
-Provide me with the correct code for this
 
 ---
 
