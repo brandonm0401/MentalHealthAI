@@ -17,22 +17,7 @@
 
 ### 📌 Project Structure  
 
-MentalHealthAI/
-│── knowledge_base/          # Stores documents for FAISS knowledge retrieval
-│── models/                  # Contains models for speech emotion recognition & STT
-│   │── emotion_detection.py  # Extracts MFCCs, Chroma, Pitch, and Energy features
-│   │── speech-to-text.py     # Converts speech to text using STT
-│   │── text-to-speech.py     # Converts text to speech using TTS
-│── services/                # Handles RAG, knowledge retrieval, and embeddings
-│   │── prepare_kb.py         # Prepares FAISS knowledge base
-│   │── knowledge_retrieval.py # Retrieves relevant responses from FAISS
-│   │── rag_pipeline.py       # Manages response generation
-│   │── trend_analysis.py     # Analyzes behavioral trends
-│── static/                  # Stores images, audio, and reference files
-│── requirements.txt         # List of required dependencies
-│── main.py                  # Entry point for the application
-│── README.md                # Project documentation
-│── LICENSE                  # License agreement
+MentalHealthAI/ │── knowledge_base/ # Stores documents for FAISS knowledge retrieval │── models/ # Contains models for speech emotion recognition & STT │ │── emotion_detection.py # Extracts MFCCs, Chroma, Pitch, and Energy features │ │── speech-to-text.py # Converts speech to text using STT │ │── text-to-speech.py # Converts text to speech using TTS │── services/ # Handles RAG, knowledge retrieval, and embeddings │ │── prepare_kb.py # Prepares FAISS knowledge base │ │── knowledge_retrieval.py # Retrieves relevant responses from FAISS │ │── rag_pipeline.py # Manages response generation │ │── trend_analysis.py # Analyzes behavioral trends │── static/ # Stores images, audio, and reference files │── requirements.txt # List of required dependencies │── main.py # Entry point for the application │── README.md # Project documentation │── LICENSE # License agreement
 
 ---
 
