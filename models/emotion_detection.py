@@ -15,7 +15,7 @@ class AudioPreprocessor:
         self.target_sample_rate = target_sample_rate  
         self.silence_threshold = silence_threshold  
         self.vad = webrtcvad.Vad(3)
-        self.deepgram_api_key = "YOUR_DEEPGRAM_API_KEY"
+        self.deepgram_api_key = "e7b267d395b28a3f7d6495f6883abb601151042e"
         self.deepgram_url = "https://api.deepgram.com/v1/listen"
 
     def record_audio(self):

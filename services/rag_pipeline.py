@@ -44,7 +44,7 @@ index_id_map = faiss.read_index(FAISS_INDEX_FILE)
 faiss_index = index_id_map
 
 retriever = vector_store.as_retriever()
-COHERE_API_KEY = "YOUR_COHERE_API_KEY"
+COHERE_API_KEY = "vM2BRPhDD5sowRkgy1146E5Z8Zm2nwT9EDqaZpBW"
 co = cohere.Client(COHERE_API_KEY)
 
 EMOTION_TEMPLATES = {
