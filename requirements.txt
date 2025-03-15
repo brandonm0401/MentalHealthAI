@@ -1,0 +1,14 @@
+torch
+torchaudio
+langchain_huggingface
+noisereduce
+sounddevice
+langchain_community
+transformers
+langchain
+numpy
+matplotlib
+cohere
+faiss-cpu
+webrtcvad
+requests
