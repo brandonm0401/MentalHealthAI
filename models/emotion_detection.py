@@ -1,4 +1,5 @@
-import io, wave
+import io
+import wave
 import torchaudio.functional as F
 import torchaudio.transforms as T
 import noisereduce as nr
@@ -11,39 +12,37 @@ import requests
 
 
 class AudioPreprocessor:
-    def __init__(self, target_sample_rate=16000, silence_threshold=2):
+    def __init__(self, target_sample_rate=16000):
         self.target_sample_rate = target_sample_rate  
-        self.silence_threshold = silence_threshold  
-        self.vad = webrtcvad.Vad(3)
-        self.deepgram_api_key = "e7b267d395b28a3f7d6495f6883abb601151042e"
+        self.vad = webrtcvad.Vad(3)  # High sensitivity for voice detection
+        self.deepgram_api_key = "0d7bc60bba92f16be747fd8685dbd93de933b123"
         self.deepgram_url = "https://api.deepgram.com/v1/listen"
 
     def record_audio(self):
-        """Record audio until sustained silence is detected."""
+        """Record audio and stop automatically when voice activity is not detected."""
         print("Listening for speech...")
         audio_buffer = []
-        frame_duration = 0.03
+        frame_duration = 0.03  # 30ms per frame
         frame_samples = int(frame_duration * self.target_sample_rate)
-        silence_frames_required = int(self.silence_threshold / frame_duration)
-        silence_buffer = 0  
+        silence_frames = 0
         recording_started = False
-        energy_threshold = 500
+        energy_threshold = 5
 
         with sd.InputStream(samplerate=self.target_sample_rate, channels=1, dtype="int16") as stream:
             while True:
                 frame, _ = stream.read(frame_samples)
                 frame_np = np.frombuffer(frame, dtype=np.int16)
 
-                is_speech = self.vad.is_speech(frame.tobytes(), self.target_sample_rate)
+                is_speech = self.vad.is_speech(frame_np.astype(np.int16).tobytes(), self.target_sample_rate)
                 energy = np.sqrt(np.mean(frame_np.astype(np.float32) ** 2))
 
                 if is_speech or energy > energy_threshold:
                     audio_buffer.extend(frame_np)
                     recording_started = True
-                    silence_buffer = 0  # Reset silence counter
+                    silence_frames = 0  # Reset silence counter
                 elif recording_started:
-                    silence_buffer += 1  # Increase silence count
-                    if silence_buffer >= silence_frames_required:
+                    silence_frames += 1  # Increment silence counter
+                    if silence_frames >= 5:  # Stop recording if no speech is detected for ~150ms
                         print("Silence detected. Stopping recording.")
                         break
 
@@ -91,34 +90,38 @@ class AudioPreprocessor:
             sample_rate=self.target_sample_rate, n_mfcc=13,
             melkwargs={"n_fft": 400, "hop_length": 160, "n_mels": 23}
         )
-        mfccs = (mfcc_transform(waveform) - torch.mean(mfcc_transform(waveform))) / torch.std(mfcc_transform(waveform))
+        mfccs = mfcc_transform(waveform)
+        mfccs = (mfccs - torch.mean(mfccs)) / (torch.std(mfccs) + 1e-8)  # Normalize
 
         spectrogram_transform = T.MelSpectrogram(
             sample_rate=self.target_sample_rate, n_fft=400, hop_length=160, n_mels=23
         )
         spectrogram = spectrogram_transform(waveform)
 
-        chroma = spectrogram[:, :12, :]
+        chroma = torch.mean(spectrogram, dim=1)[:12]  # Chroma features from spectrogram
 
         pitch = F.detect_pitch_frequency(waveform, sample_rate=self.target_sample_rate)
         pitch = (pitch - torch.mean(pitch)) / (torch.std(pitch) + 1e-8)  # Normalize
 
-        energy_frames = [
-            np.sqrt(np.mean(waveform.numpy().squeeze()[i: i + 400] ** 2))
-            for i in range(0, len(waveform.numpy().squeeze()) - 400, 160)
-        ]
-        energy = np.mean(energy_frames)
+        energy = torch.sqrt(torch.mean(waveform ** 2))  # Root Mean Square (RMS) Energy
 
-        # **Spectral Centroid Calculation**
-        spectral_centroid = F.spectral_centroid(waveform, sample_rate=self.target_sample_rate, n_fft=400, hop_length=160)
+        spectral_centroid = F.spectral_centroid(
+            waveform, 
+            sample_rate=self.target_sample_rate, 
+            n_fft=400, 
+            hop_length=160, 
+            pad=0,  
+            window=torch.hann_window(400),  
+            win_length=400
+        )
         spectral_centroid = (spectral_centroid - torch.mean(spectral_centroid)) / (torch.std(spectral_centroid) + 1e-8)  # Normalize
 
         return {
-            "MFCCs": mfccs,
-            "Chroma": chroma,
-            "Pitch": pitch,
-            "Energy": energy,
-            "Spectral Centroid": spectral_centroid
+            "MFCCs": mfccs.numpy().squeeze(),
+            "Chroma": chroma.numpy().squeeze(),
+            "Pitch": pitch.numpy().squeeze(),
+            "Energy": energy.item(),
+            "Spectral Centroid": spectral_centroid.numpy().squeeze()
         }
 
     def visualize_features(self, waveform, features):
@@ -127,51 +130,64 @@ class AudioPreprocessor:
             print("No features to visualize.")
             return
 
-        mfccs = features["MFCCs"].squeeze().numpy()
-        chroma = features["Chroma"].squeeze().numpy()
-        pitch = features["Pitch"].squeeze().numpy()
-        energy = features["Energy"]
-        spectral_centroid = features["Spectral Centroid"].squeeze().numpy()
-
         fig, axs = plt.subplots(6, 1, figsize=(12, 12))
 
+        # Waveform
         axs[0].plot(waveform.numpy().squeeze(), color="blue")
         axs[0].set_title("Waveform")
-        axs[0].set_xlabel("Samples")
-        axs[0].set_ylabel("Amplitude")
 
-        im1 = axs[1].imshow(mfccs, aspect="auto", origin="lower", cmap="inferno")
+        # MFCCs (2D)
+        axs[1].imshow(features["MFCCs"], aspect="auto", origin="lower", cmap="inferno")
         axs[1].set_title("MFCCs")
-        axs[1].set_xlabel("Time Frames")
-        axs[1].set_ylabel("MFCC Coefficients")
-        fig.colorbar(im1, ax=axs[1])
 
-        im2 = axs[2].imshow(chroma, aspect="auto", origin="lower", cmap="coolwarm")
+        # Chroma (Ensure it's 2D)
+        chroma_data = features["Chroma"]
+        if chroma_data.ndim == 1:
+            chroma_data = chroma_data.reshape(1, -1)  # Convert to 2D
+        axs[2].imshow(chroma_data, aspect="auto", origin="lower", cmap="coolwarm")
         axs[2].set_title("Chroma Features")
-        axs[2].set_xlabel("Time Frames")
-        axs[2].set_ylabel("Chroma Bins")
-        fig.colorbar(im2, ax=axs[2])
 
-        axs[3].plot(pitch, color="green")
+        # Pitch (1D - Use plot)
+        axs[3].plot(features["Pitch"], color="green")
         axs[3].set_title("Pitch (Fundamental Frequency - F0)")
-        axs[3].set_xlabel("Time Frames")
-        axs[3].set_ylabel("Frequency (Hz)")
 
-        axs[4].bar(["Energy"], [energy], color="red")
+        # Energy (Scalar - Use bar)
+        axs[4].bar(["Energy"], [features["Energy"]], color="red")
         axs[4].set_title("Energy (RMS)")
-        axs[4].set_ylabel("Energy Level")
 
-        axs[5].plot(spectral_centroid, color="purple")
+        # Spectral Centroid (1D - Use plot)
+        axs[5].plot(features["Spectral Centroid"], color="purple")
         axs[5].set_title("Spectral Centroid")
-        axs[5].set_xlabel("Time Frames")
-        axs[5].set_ylabel("Frequency (Hz)")
 
         plt.tight_layout()
         plt.show()
 
-if __name__ == "__main__":
-    preprocessor = AudioPreprocessor(target_sample_rate=16000, silence_threshold=2)
-    text, features = preprocessor.preprocess_audio()
+    def speech_to_text(self, waveform):
+        """Convert speech to text using Deepgram API."""
+        # Convert waveform to WAV format
+        wav_buffer = io.BytesIO()
+        with wave.open(wav_buffer, 'wb') as wf:
+            wf.setnchannels(1)  # Mono
+            wf.setsampwidth(2)  # 16-bit audio
+            wf.setframerate(self.target_sample_rate)
+            wf.writeframes(waveform.numpy().astype(np.int16).tobytes())
 
+        audio_data = wav_buffer.getvalue()
+        headers = {
+            "Authorization": f"Token {self.deepgram_api_key}",
+            "Content-Type": "audio/wav"
+        }
+        response = requests.post(self.deepgram_url, headers=headers, data=audio_data)
+
+        if response.status_code == 200:
+            return response.json().get("results", {}).get("channels", [{}])[0].get("alternatives", [{}])[0].get("transcript", "")
+
+        print(f"Deepgram Error: {response.status_code} - {response.text}")
+        return "Transcription failed."
+
+
+if __name__ == "__main__":
+    preprocessor = AudioPreprocessor(target_sample_rate=16000)
+    text, features = preprocessor.preprocess_audio()
     if text:
         print(f"Final Transcription: {text}")
