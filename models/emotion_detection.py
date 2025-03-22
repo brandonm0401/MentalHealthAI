@@ -6,17 +6,24 @@ import noisereduce as nr
 import numpy as np
 import torch
 import webrtcvad
-import matplotlib.pyplot as plt
 import sounddevice as sd
 import requests
-
+import joblib
+from scipy.stats import skew
 
 class AudioPreprocessor:
-    def __init__(self, target_sample_rate=16000):
+    def __init__(self, target_sample_rate=16000, xgb_model_path="xgboost_emotion_classifier.pkl"):
         self.target_sample_rate = target_sample_rate  
         self.vad = webrtcvad.Vad(3)  # High sensitivity for voice detection
         self.deepgram_api_key = "0d7bc60bba92f16be747fd8685dbd93de933b123"
         self.deepgram_url = "https://api.deepgram.com/v1/listen"
+        # Load the trained XGBoost model
+        self.xgb_model = joblib.load(xgb_model_path)
+
+        # Feature extraction parameters
+        self.n_fft = 512
+        self.hop_length = 160
+        self.win_length = self.n_fft
 
     def record_audio(self):
         """Record audio and stop automatically when voice activity is not detected."""
@@ -51,9 +58,9 @@ class AudioPreprocessor:
 
         print("Recording complete!")
         return torch.tensor(audio_buffer, dtype=torch.float32).unsqueeze(0)
-    
+
     def preprocess_audio(self):
-        """Complete pipeline: Record → Preprocess → Extract Features → Convert to Text"""
+        """Complete pipeline: Record → Preprocess → Extract Features → Convert to Text → Classify Emotion"""
         try:
             waveform = self.record_audio()
             waveform = self.resample_audio(waveform, self.target_sample_rate)
@@ -61,14 +68,15 @@ class AudioPreprocessor:
             features = self.extract_features(waveform)
 
             print("Feature Extraction Complete!")
-            self.visualize_features(waveform, features)
 
             text = self.speech_to_text(waveform)
-            return text, features
+            emotion = self.classify_emotion(features)
+
+            return text, emotion, features
         
         except Exception as e:
             print(f"Error during processing: {e}")
-            return None, None
+            return None, None, None
 
     def resample_audio(self, waveform, sample_rate):
         """Ensure the waveform is at the target sample rate."""
@@ -81,113 +89,86 @@ class AudioPreprocessor:
         """Apply noise reduction."""
         waveform_np = waveform.numpy().squeeze()
         denoised_waveform_np = nr.reduce_noise(y=waveform_np, sr=sample_rate, prop_decrease=0.9)
-
         return torch.tensor(denoised_waveform_np, dtype=torch.float32).unsqueeze(0)
 
     def extract_features(self, waveform):
-        """Extract MFCCs, Chroma, Pitch, Energy, and Spectral Centroid features."""
-        mfcc_transform = T.MFCC(
-            sample_rate=self.target_sample_rate, n_mfcc=13,
-            melkwargs={"n_fft": 400, "hop_length": 160, "n_mels": 23}
-        )
-        mfccs = mfcc_transform(waveform)
-        mfccs = (mfccs - torch.mean(mfccs)) / (torch.std(mfccs) + 1e-8)  # Normalize
+        """Extract required features for emotion classification."""
+        if waveform.shape[0] > 1:
+            waveform = torch.mean(waveform, dim=0, keepdim=True)  # Convert to mono
 
-        spectrogram_transform = T.MelSpectrogram(
-            sample_rate=self.target_sample_rate, n_fft=400, hop_length=160, n_mels=23
-        )
-        spectrogram = spectrogram_transform(waveform)
+        # Define transformations
+        mfcc_transform = T.MFCC(sample_rate=self.target_sample_rate, n_mfcc=13, 
+                                melkwargs={"n_fft": self.n_fft, "hop_length": self.hop_length, "n_mels": 40})
+        spectral_centroid_transform = F.spectral_centroid
+        mel_spectrogram_transform = T.MelSpectrogram(sample_rate=self.target_sample_rate, 
+                                                    n_fft=self.n_fft, hop_length=self.hop_length, n_mels=40)
 
-        chroma = torch.mean(spectrogram, dim=1)[:12]  # Chroma features from spectrogram
+        # Compute MFCCs
+        mfcc = mfcc_transform(waveform).squeeze().numpy()
+        mfcc_delta = np.diff(mfcc, axis=1)  # First-order difference
+        mfcc_delta2 = np.diff(mfcc_delta, axis=1)  # Second-order difference
 
-        pitch = F.detect_pitch_frequency(waveform, sample_rate=self.target_sample_rate)
-        pitch = (pitch - torch.mean(pitch)) / (torch.std(pitch) + 1e-8)  # Normalize
+        # Compute Spectral Centroid
+        window = torch.hann_window(self.win_length)
+        spectral_centroid = spectral_centroid_transform(waveform, sample_rate=self.target_sample_rate,
+                                                        pad=0, window=window, n_fft=self.n_fft, hop_length=self.hop_length, 
+                                                        win_length=self.win_length)
+        spectral_centroid = spectral_centroid.squeeze().numpy()
 
-        energy = torch.sqrt(torch.mean(waveform ** 2))  # Root Mean Square (RMS) Energy
+        # Compute Mel Spectrogram & Chroma
+        mel_spec = mel_spectrogram_transform(waveform)
+        chroma = torch.log(mel_spec + 1e-6).mean(dim=1).numpy()
 
-        spectral_centroid = F.spectral_centroid(
-            waveform, 
-            sample_rate=self.target_sample_rate, 
-            n_fft=400, 
-            hop_length=160, 
-            pad=0,  
-            window=torch.hann_window(400),  
-            win_length=400
-        )
-        spectral_centroid = (spectral_centroid - torch.mean(spectral_centroid)) / (torch.std(spectral_centroid) + 1e-8)  # Normalize
+        # Compute RMS Energy
+        energy = torch.sqrt(torch.mean(waveform**2)).item()
 
-        return {
-            "MFCCs": mfccs.numpy().squeeze(),
-            "Chroma": chroma.numpy().squeeze(),
-            "Pitch": pitch.numpy().squeeze(),
-            "Energy": energy.item(),
-            "Spectral Centroid": spectral_centroid.numpy().squeeze()
+        # Compute Pitch
+        pitch = F.detect_pitch_frequency(waveform, sample_rate=self.target_sample_rate).squeeze().numpy()
+        pitch_delta = np.diff(pitch) if len(pitch) > 1 else np.array([0])
+
+        # Return Features as a Dictionary ✅
+        features = {
+            "mfcc_mean": np.mean(mfcc),
+            "mfcc_delta_mean": np.mean(mfcc_delta),
+            "mfcc_delta2_mean": np.mean(mfcc_delta2),
+            "spectral_centroid_mean": np.mean(spectral_centroid),
+            "spectral_centroid_std": np.std(spectral_centroid),
+            "spectral_centroid_var": np.var(spectral_centroid),
+            "chroma_mean": np.mean(chroma),
+            "chroma_delta_mean": np.mean(np.diff(chroma)),
+            "chroma_skew": skew(chroma.flatten()),
+            "energy": energy,
+            "waveform_peak": np.max(waveform.numpy()),
+            "waveform_var": np.var(waveform.numpy()),
+            "pitch_mean": np.mean(pitch),
+            "pitch_delta_mean": np.mean(pitch_delta),
+            "pitch_delta_std": np.std(pitch_delta),
         }
+        print("Extracted Features:", features)  # Debugging
+        return features
 
-    def visualize_features(self, waveform, features):
-        """Visualize Waveform, MFCCs, Chroma, Pitch, Energy, and Spectral Centroid."""
-        if features is None:
-            print("No features to visualize.")
-            return
-
-        fig, axs = plt.subplots(6, 1, figsize=(12, 12))
-
-        # Waveform
-        axs[0].plot(waveform.numpy().squeeze(), color="blue")
-        axs[0].set_title("Waveform")
-
-        # MFCCs (2D)
-        axs[1].imshow(features["MFCCs"], aspect="auto", origin="lower", cmap="inferno")
-        axs[1].set_title("MFCCs")
-
-        # Chroma (Ensure it's 2D)
-        chroma_data = features["Chroma"]
-        if chroma_data.ndim == 1:
-            chroma_data = chroma_data.reshape(1, -1)  # Convert to 2D
-        axs[2].imshow(chroma_data, aspect="auto", origin="lower", cmap="coolwarm")
-        axs[2].set_title("Chroma Features")
-
-        # Pitch (1D - Use plot)
-        axs[3].plot(features["Pitch"], color="green")
-        axs[3].set_title("Pitch (Fundamental Frequency - F0)")
-
-        # Energy (Scalar - Use bar)
-        axs[4].bar(["Energy"], [features["Energy"]], color="red")
-        axs[4].set_title("Energy (RMS)")
-
-        # Spectral Centroid (1D - Use plot)
-        axs[5].plot(features["Spectral Centroid"], color="purple")
-        axs[5].set_title("Spectral Centroid")
-
-        plt.tight_layout()
-        plt.show()
-
-    def speech_to_text(self, waveform):
-        """Convert speech to text using Deepgram API."""
-        # Convert waveform to WAV format
-        wav_buffer = io.BytesIO()
-        with wave.open(wav_buffer, 'wb') as wf:
-            wf.setnchannels(1)  # Mono
-            wf.setsampwidth(2)  # 16-bit audio
-            wf.setframerate(self.target_sample_rate)
-            wf.writeframes(waveform.numpy().astype(np.int16).tobytes())
-
-        audio_data = wav_buffer.getvalue()
-        headers = {
-            "Authorization": f"Token {self.deepgram_api_key}",
-            "Content-Type": "audio/wav"
-        }
-        response = requests.post(self.deepgram_url, headers=headers, data=audio_data)
-
-        if response.status_code == 200:
-            return response.json().get("results", {}).get("channels", [{}])[0].get("alternatives", [{}])[0].get("transcript", "")
-
-        print(f"Deepgram Error: {response.status_code} - {response.text}")
-        return "Transcription failed."
-
+    def classify_emotion(self, features):
+        FEATURE_ORDER = [
+            "mfcc_mean", "mfcc_delta_mean", "mfcc_delta2_mean",
+            "spectral_centroid_mean", "spectral_centroid_std", "spectral_centroid_var",
+            "chroma_mean", "chroma_delta_mean", "chroma_skew",
+            "energy", "waveform_peak", "waveform_var",
+            "pitch_mean", "pitch_delta_mean", "pitch_delta_std"
+        ]
+        label_map = {0: "Happy", 1: "Sad", 2: "Neutral"}
+        
+        # Convert features into an array (excluding Energy_Variance)
+        feature_vector = np.array([features[key] for key in FEATURE_ORDER]).reshape(1, -1)
+        
+        # Predict emotion using XGBoost model
+        predicted_label = self.xgb_model.predict(feature_vector)[0]
+        return label_map.get(predicted_label, "Unknown")
 
 if __name__ == "__main__":
-    preprocessor = AudioPreprocessor(target_sample_rate=16000)
-    text, features = preprocessor.preprocess_audio()
+    preprocessor = AudioPreprocessor(target_sample_rate=16000, xgb_model_path="xgboost_emotion_classifier.pkl")
+    text, emotion, features = preprocessor.preprocess_audio()
+    
     if text:
         print(f"Final Transcription: {text}")
+    if emotion:
+        print(f"Predicted Emotion: {emotion}")
